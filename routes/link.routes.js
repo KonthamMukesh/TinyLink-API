@@ -24,7 +24,7 @@ router.get('/stats', controller.stats);
 router.get('/healthz', controller.health);
 
 // ✅ Redirect & track clicks (must be last)
-router.get('/r/:code', controller.redirect);
+router.get('/:code', controller.redirect);
 
 
 module.exports = router;

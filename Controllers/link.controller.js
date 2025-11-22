@@ -1,194 +1,225 @@
-const sql = require('../config/db');
+const logger = require('../utils/logger');
+const AppError = require('../utils/appError');
+const linksModel = require('../models/link.model');
 
-// ✅ Health check
-exports.health = async (req, res) => {
+
+// =======================
+// ✅ Health Check
+// =======================
+exports.health = async (req, res, next) => {
   try {
-    const db = await sql`SELECT NOW()`;
+    logger.info('health check called');
 
     const uptimeSeconds = process.uptime();
     const hours = Math.floor(uptimeSeconds / 3600);
     const minutes = Math.floor((uptimeSeconds % 3600) / 60);
     const seconds = Math.floor(uptimeSeconds % 60);
 
-    res.json({
-      status: '✅ Server is Healthy',
-      database: '✅ Neon PostgreSQL Connected',
+    return res.status(200).json({
+      ok: true,
+      status: 'Server is healthy',
       uptime: `${hours}h ${minutes}m ${seconds}s`,
       timestamp: new Date()
     });
 
-  } catch (err) {
-    res.status(500).json({
-      status: '❌ Server Down',
-      database: '❌ Database Offline',
-      uptime: 'Unavailable'
-    });
+  } catch (error) {
+    logger.error('Health check failed', { error: error.message });
+    return next(new AppError('Server unhealthy', 500));
   }
 };
 
 
-// ✅ Create short link
-exports.createLink = async (req, res) => {
-  console.log('🔗 Create link API called');
-  const { longUrl, customCode } = req.body;
-  console.log('📥 Request body:', req.body);
-
-  if (!longUrl) {
-    console.log('❌ Missing longUrl');
-    return res.status(400).json({ message: 'longUrl required' });
-  }
-
-  const code = customCode || Math.random().toString(36).substring(2, 8);
-  console.log('🔑 Generated code:', code);
-
+// =======================
+// ✅ Create Short Link
+// =======================
+exports.createLink = async (req, res, next) => {
   try {
-    const existing = await sql`SELECT * FROM links WHERE code=${code}`;
-    console.log('🔍 Existing code check:', existing.length);
+    logger.info('createLink called');
 
+    const { longUrl, customCode } = req.body;
+
+    if (!longUrl) {
+      return next(new AppError('longUrl is required', 400));
+    }
+
+    const code = customCode || Math.random().toString(36).substring(2, 8);
+
+    const existing = await linksModel.checkCode(code);
     if (existing.length > 0) {
-      console.log('❌ Code conflict');
-      return res.status(409).json({ message: 'Code already exists' });
+      return next(new AppError('Code already exists', 409));
     }
 
-    const result = await sql`
-      INSERT INTO links (code, long_url)
-      VALUES (${code}, ${longUrl})
-      RETURNING *;
-    `;
+    const saved = await linksModel.createLink(code, longUrl);
 
-    console.log('✅ Link created:', result[0]);
-    res.status(201).json(result[0]);
-  } catch (err) {
-    console.error('❌ Create failed:', err);
-    res.status(500).json({ message: 'Create failed' });
-  }
-};
-
-// ✅ Get all links
-exports.getAll = async (req, res) => {
-  console.log('📥 Fetch all links');
-  try {
-    const result = await sql`SELECT * FROM links ORDER BY id DESC`;
-    console.log(`✅ Links fetched: ${result.length}`);
-    res.json(result);
-  } catch (err) {
-    console.error('❌ Fetch failed:', err);
-    res.status(500).json({ message: 'Fetch failed' });
-  }
-};
-
-// ✅ Update link
-exports.updateLink = async (req, res) => {
-  const { code } = req.params;
-  const { newCode } = req.body;
-
-  if (!newCode || newCode.length < 6 || newCode.length > 8) {
-    return res.status(400).json({ message: 'Invalid code length' });
-  }
-
-  try {
-    const exist = await sql`SELECT * FROM links WHERE code=${newCode}`;
-    if (exist.length > 0) {
-      return res.status(409).json({ message: 'Code exists' });
-    }
-
-    const result = await sql`
-      UPDATE links
-      SET code=${newCode}
-      WHERE code=${code}
-      RETURNING *;
-    `;
-
-    res.json(result[0]);
-
-  } catch (err) {
-    console.error('❌ DB Error:', err);
-    res.status(500).json({ message: 'DB error' });
-  }
-};
-
-
-// ✅ Delete link
-exports.deleteLink = async (req, res) => {
-  const { id } = req.params;
-  console.log('🗑️ Delete ID:', id);
-
-  try {
-    await sql`DELETE FROM links WHERE id=${id}`;
-    res.status(204).send();
-  } catch (err) {
-    res.status(500).json({ message: 'Delete failed' });
-  }
-};
-
-
-// ✅ Stats
-exports.stats = async (req, res) => {
-  console.log('📊 Stats API called');
-
-  try {
-    const totalLinks = await sql`SELECT COUNT(*) FROM links`;
-    const totalClicks = await sql`SELECT COALESCE(SUM(clicks),0) FROM links`;
-
-    console.log('✅ Total Links:', totalLinks[0].count);
-    console.log('✅ Total Clicks:', totalClicks[0].coalesce);
-
-    res.json({
-      totalLinks: Number(totalLinks[0].count),
-      totalClicks: Number(totalClicks[0].coalesce)
+    return res.status(201).json({
+      code: '00',
+      status: 'success',
+      message: 'Link created successfully',
+      data: saved[0],
+      errors: []
     });
-  } catch (err) {
-    console.error('❌ Stats failed:', err);
-    res.status(500).json({ message: 'Stats failed' });
+
+  } catch (error) {
+    logger.error('createLink error', { error: error.message });
+    return next(new AppError('Create failed', 500));
   }
 };
 
-// ✅ Redirect + track clicks
-// ✅ Redirect + track clicks (FIXED VERSION)
-exports.redirect = async (req, res) => {
-  const { code } = req.params;
 
+// =======================
+// ✅ Get All Links
+// =======================
+exports.getAll = async (req, res, next) => {
   try {
-    const result = await sql`SELECT * FROM links WHERE code=${code}`;
+    logger.info('getAll links called');
 
-    if (result.length === 0) {
+    const links = await linksModel.getAll();
+
+    return res.status(200).json({
+      code: '00',
+      status: 'success',
+      message: 'Links fetched successfully',
+      data: links,
+      errors: []
+    });
+
+  } catch (error) {
+    logger.error('getAll error', { error: error.message });
+    return next(new AppError('Fetch failed', 500));
+  }
+};
+
+
+// =======================
+// ✅ Get Link By Code
+// =======================
+exports.getLinkByCode = async (req, res, next) => {
+  try {
+    const { code } = req.params;
+
+    const link = await linksModel.getByCode(code);
+
+    if (!link || link.length === 0) {
+      return next(new AppError('Link not found', 404));
+    }
+
+    return res.status(200).json({
+      code: '00',
+      status: 'success',
+      message: 'Link fetched successfully',
+      data: link[0],
+      errors: []
+    });
+
+  } catch (error) {
+    logger.error('getLinkByCode error', { error: error.message });
+    return next(new AppError('Fetch failed', 500));
+  }
+};
+
+
+// =======================
+// ✅ Update Short Code
+// =======================
+exports.updateLink = async (req, res, next) => {
+  try {
+    const { code } = req.params;
+    const { newCode } = req.body;
+
+    if (!newCode || newCode.length < 6 || newCode.length > 8) {
+      return next(new AppError('Invalid code length', 400));
+    }
+
+    const exists = await linksModel.checkCode(newCode);
+    if (exists.length > 0) {
+      return next(new AppError('Code already exists', 409));
+    }
+
+    const updated = await linksModel.updateCode(code, newCode);
+
+    return res.status(200).json({
+      code: '00',
+      status: 'success',
+      message: 'Link updated successfully',
+      data: updated[0],
+      errors: []
+    });
+
+  } catch (error) {
+    logger.error('updateLink error', { error: error.message });
+    return next(new AppError('Update failed', 500));
+  }
+};
+
+
+// =======================
+// ✅ Delete Link
+// =======================
+exports.deleteLink = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const deleted = await linksModel.deleteById(id);
+
+    if (!deleted) {
+      return next(new AppError('Link not found', 404));
+    }
+
+    return res.status(200).json({
+      code: '00',
+      status: 'success',
+      message: 'Link deleted successfully',
+      data: null,
+      errors: []
+    });
+
+  } catch (error) {
+    logger.error('deleteLink error', { error: error.message });
+    return next(new AppError('Delete failed', 500));
+  }
+};
+
+
+// =======================
+// ✅ Global Stats
+// =======================
+exports.stats = async (req, res, next) => {
+  try {
+    logger.info('stats called');
+
+    const stats = await linksModel.getStats();
+
+    return res.status(200).json({
+      totalLinks: Number(stats.totalLinks[0].count),
+      totalClicks: Number(stats.totalClicks[0].coalesce)
+    });
+
+  } catch (error) {
+    logger.error('stats error', { error: error.message });
+    return next(new AppError('Stats failed', 500));
+  }
+};
+
+
+// =======================
+// ✅ Redirect (Important)
+// =======================
+exports.redirect = async (req, res, next) => {
+  try {
+    const { code } = req.params;
+
+    const link = await linksModel.getByCode(code);
+
+    if (!link || link.length === 0) {
       return res.status(404).send('Link not found');
     }
 
-    // update click count
-    await sql`
-      UPDATE links 
-      SET clicks = clicks + 1,
-          last_clicked_at = NOW()
-      WHERE code=${code}
-    `;
+    await linksModel.trackClick(code);
 
-    // ✅ IMPORTANT: REAL REDIRECT
-    return res.redirect(302, result[0].long_url);
+    return res.redirect(302, link[0].long_url);
 
-  } catch (err) {
-    res.status(500).send('Server error');
+  } catch (error) {
+    logger.error('redirect error', { error: error.message });
+    return next(new AppError('Redirect failed', 500));
   }
 };
-
-
-
-
-
-
-exports.getLinkByCode = async (req, res) => {
-  const { code } = req.params;
-
-  try {
-    const result = await sql`SELECT * FROM links WHERE code=${code}`;
-
-    if (result.length === 0) {
-      return res.status(404).json({ message: 'Not found' });
-    }
-
-    res.json(result[0]);
-  } catch (err) {
-    res.status(500).json({ message: 'Error fetching link' });
-  }
-};
-
