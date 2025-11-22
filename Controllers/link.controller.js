@@ -144,6 +144,7 @@ exports.stats = async (req, res) => {
 };
 
 // ✅ Redirect + track clicks
+// ✅ Redirect + track clicks (FIXED VERSION)
 exports.redirect = async (req, res) => {
   const { code } = req.params;
 
@@ -154,6 +155,7 @@ exports.redirect = async (req, res) => {
       return res.status(404).send('Link not found');
     }
 
+    // update click count
     await sql`
       UPDATE links 
       SET clicks = clicks + 1,
@@ -161,13 +163,15 @@ exports.redirect = async (req, res) => {
       WHERE code=${code}
     `;
 
-    // ✅ REAL REDIRECT
+    // ✅ IMPORTANT: REAL REDIRECT
     return res.redirect(302, result[0].long_url);
 
   } catch (err) {
     res.status(500).send('Server error');
   }
 };
+
+
 
 
 
