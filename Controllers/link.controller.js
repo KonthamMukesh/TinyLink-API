@@ -151,7 +151,7 @@ exports.redirect = async (req, res) => {
     const result = await sql`SELECT * FROM links WHERE code=${code}`;
 
     if (result.length === 0) {
-      return res.status(404).json({ success: false, message: 'Link not found' });
+      return res.status(404).send('Link not found');
     }
 
     await sql`
@@ -161,10 +161,11 @@ exports.redirect = async (req, res) => {
       WHERE code=${code}
     `;
 
-    res.json({ success: true, long_url: result[0].long_url });
+    // ✅ REAL REDIRECT
+    return res.redirect(302, result[0].long_url);
 
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Server error' });
+    res.status(500).send('Server error');
   }
 };
 
