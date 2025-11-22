@@ -20,7 +20,10 @@ app.use('/api', linkRoutes);
 // Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  logger.info(`Server running at http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
+});
+app.get("/", (req, res) => {
+  res.send("TinyLink API is running 🚀");
 });
 
 module.exports = app;
