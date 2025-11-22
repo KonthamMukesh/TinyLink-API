@@ -1,142 +1,157 @@
 const sql = require('../config/db');
 const logger = require('../utils/logger');
 
-// =======================
-// ✅ LINKS MODEL
-// =======================
-
-// Create new link
+// ✅ Create new link
 exports.createLink = async (code, longUrl) => {
   try {
-    const query = `
+    console.log('🟢 createLink() called:', { code, longUrl });
+
+    const result = await sql`
       INSERT INTO links (code, long_url)
-      VALUES ($1, $2)
+      VALUES (${code.trim()}, ${longUrl.trim()})
       RETURNING *
     `;
 
-    const result = await sql(query, [code.trim(), longUrl.trim()]);
-    logger.info(`✅ Link created: ${code}`);
+    console.log('✅ createLink result:', result);
     return result;
 
   } catch (err) {
+    console.error('❌ createLink error:', err);
     logger.error(`Error in createLink model: ${err.message}`);
-    throw new Error(`Database error: ${err.message}`);
+    throw err;
   }
 };
 
-
-// Check if code exists
+// ✅ Check if code exists
 exports.checkCode = async (code) => {
   try {
-    const query = `SELECT * FROM links WHERE code = $1`;
-    const result = await sql(query, [code.trim()]);
+    console.log('🟢 checkCode() called:', code);
+
+    const result = await sql`
+      SELECT * FROM links WHERE code=${code.trim()}
+    `;
+
+    console.log('✅ checkCode result:', result);
     return result;
 
   } catch (err) {
-    logger.error(`Error in checkCode model: ${err.message}`);
-    throw new Error(`Database error: ${err.message}`);
+    console.error('❌ checkCode error:', err);
+    throw err;
   }
 };
 
-
-// Get all links
+// ✅ Get all links
 exports.getAll = async () => {
   try {
-    const query = `SELECT * FROM links ORDER BY id DESC`;
-    const result = await sql(query);
-    logger.info(`Fetched all links (${result.length})`);
+    console.log('🟢 getAll() called');
+
+    const result = await sql`
+      SELECT * FROM links ORDER BY id DESC
+    `;
+
+    console.log('✅ getAll result:', result);
     return result;
 
   } catch (err) {
-    logger.error(`Error in getAll model: ${err.message}`);
-    throw new Error(`Database error: ${err.message}`);
+    console.error('❌ getAll error:', err);
+    throw err;
   }
 };
 
-
-// Get link by code
+// ✅ Get link by code
 exports.getByCode = async (code) => {
   try {
-    const query = `SELECT * FROM links WHERE code = $1`;
-    const result = await sql(query, [code.trim()]);
+    console.log('🟢 getByCode() called:', code);
+
+    const result = await sql`
+      SELECT * FROM links WHERE code=${code.trim()}
+    `;
+
+    console.log('✅ getByCode result:', result);
     return result;
 
   } catch (err) {
-    logger.error(`Error in getByCode model: ${err.message}`);
-    throw new Error(`Database error: ${err.message}`);
+    console.error('❌ getByCode error:', err);
+    throw err;
   }
 };
 
-
-// Update short code
+// ✅ Update short code
 exports.updateCode = async (oldCode, newCode) => {
   try {
-    const query = `
+    console.log('🟢 updateCode() called:', { oldCode, newCode });
+
+    const result = await sql`
       UPDATE links
-      SET code = $1
-      WHERE code = $2
+      SET code=${newCode.trim()}
+      WHERE code=${oldCode.trim()}
       RETURNING *
     `;
 
-    const result = await sql(query, [newCode.trim(), oldCode.trim()]);
-    logger.info(`✅ Code updated: ${oldCode} → ${newCode}`);
+    console.log('✅ updateCode result:', result);
     return result;
 
   } catch (err) {
-    logger.error(`Error in updateCode model: ${err.message}`);
-    throw new Error(`Database error: ${err.message}`);
+    console.error('❌ updateCode error:', err);
+    throw err;
   }
 };
 
-
-// Delete by ID
+// ✅ Delete by ID
 exports.deleteById = async (id) => {
   try {
-    const query = `DELETE FROM links WHERE id = $1`;
-    const result = await sql(query, [id]);
-    logger.info(`🗑️ Deleted link ID: ${id}`);
-    return result.count > 0;
+    console.log('🟢 deleteById() called:', id);
+
+    const result = await sql`
+      DELETE FROM links WHERE id=${id}
+    `;
+
+    console.log('✅ delete result:', result);
+    return true;
 
   } catch (err) {
-    logger.error(`Error in deleteById model: ${err.message}`);
-    throw new Error(`Database error: ${err.message}`);
+    console.error('❌ deleteById error:', err);
+    throw err;
   }
 };
 
-
-// Get stats
+// ✅ Get stats
 exports.getStats = async () => {
   try {
-    const totalLinks = await sql(`SELECT COUNT(*) FROM links`);
-    const totalClicks = await sql(`SELECT COALESCE(SUM(clicks),0) FROM links`);
+    console.log('🟢 getStats() called');
+
+    const totalLinks = await sql`SELECT COUNT(*) FROM links`;
+    const totalClicks = await sql`SELECT COALESCE(SUM(clicks),0) FROM links`;
+
+    console.log('✅ stats result:', { totalLinks, totalClicks });
 
     return {
-      totalLinks,
-      totalClicks
+      totalLinks: Number(totalLinks[0].count),
+      totalClicks: Number(totalClicks[0].coalesce)
     };
 
   } catch (err) {
-    logger.error(`Error in getStats model: ${err.message}`);
-    throw new Error(`Database error: ${err.message}`);
+    console.error('❌ getStats error:', err);
+    throw err;
   }
 };
 
-
-// Track click for redirect
+// ✅ Track redirect clicks
 exports.trackClick = async (code) => {
   try {
-    const query = `
+    console.log('🟢 trackClick() called:', code);
+
+    await sql`
       UPDATE links
       SET clicks = clicks + 1,
           last_clicked_at = NOW()
-      WHERE code = $1
+      WHERE code=${code.trim()}
     `;
 
-    await sql(query, [code.trim()]);
-    logger.info(`📈 Click tracked for: ${code}`);
+    console.log('✅ trackClick updated');
 
   } catch (err) {
-    logger.error(`Error in trackClick model: ${err.message}`);
-    throw new Error(`Database error: ${err.message}`);
+    console.error('❌ trackClick error:', err);
+    throw err;
   }
 };

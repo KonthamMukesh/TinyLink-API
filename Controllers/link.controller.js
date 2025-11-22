@@ -199,26 +199,25 @@ exports.stats = async (req, res, next) => {
   }
 };
 
-
 // =======================
 // ✅ Redirect (Important)
 // =======================
-exports.redirect = async (req, res, next) => {
-  try {
-    const { code } = req.params;
+exports.redirect = async (req, res) => {
+  const { code } = req.params;
 
+  try {
     const link = await linksModel.getByCode(code);
 
-    if (!link || link.length === 0) {
+    if (!link.length) {
       return res.status(404).send('Link not found');
     }
 
     await linksModel.trackClick(code);
+    return res.redirect(link[0].long_url);
 
-    return res.redirect(302, link[0].long_url);
-
-  } catch (error) {
-    logger.error('redirect error', { error: error.message });
-    return next(new AppError('Redirect failed', 500));
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Internal Server Error');
   }
 };
+
