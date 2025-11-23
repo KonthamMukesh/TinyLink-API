@@ -213,7 +213,10 @@ exports.redirect = async (req, res) => {
     }
 
     await linksModel.trackClick(code);
-    return res.redirect(link[0].long_url);
+    return res.json({
+  success: true,
+  longUrl: link[0].long_url
+});
 
   } catch (err) {
     console.error(err);
