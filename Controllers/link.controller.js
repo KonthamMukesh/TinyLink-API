@@ -5,25 +5,35 @@ const linksModel = require('../models/link.model');
 // =======================
 // ✅ Health Check
 // =======================
-exports.health = async (req, res, next) => {
+exports.healthCheck = async (req, res, next) => {
   try {
-    logger.info('health check called');
+    console.log('🚀 NEW HEALTH FUNCTION CALLED');
+    logger.info('Health check API called');
 
+    // ✅ Server uptime
     const uptimeSeconds = process.uptime();
     const hours = Math.floor(uptimeSeconds / 3600);
     const minutes = Math.floor((uptimeSeconds % 3600) / 60);
     const seconds = Math.floor(uptimeSeconds % 60);
 
+    // ✅ Correct DB health call
+    const dbHealth = await linksModel.getDbHealth();
+
     return res.status(200).json({
       ok: true,
       status: 'Server is healthy',
       uptime: `${hours}h ${minutes}m ${seconds}s`,
-      timestamp: new Date()
+      timestamp: new Date(),
+      database: dbHealth
     });
 
   } catch (error) {
     logger.error('Health check failed', { error: error.message });
-    return next(new AppError('Server unhealthy', 500));
+
+    return res.status(500).json({
+      ok: false,
+      status: 'Server unhealthy'
+    });
   }
 };
 
@@ -208,19 +218,20 @@ exports.redirect = async (req, res) => {
   try {
     const link = await linksModel.getByCode(code);
 
-    if (!link.length) {
+    if (!link || link.length === 0) {
       return res.status(404).send('Link not found');
     }
 
+    // update click count
     await linksModel.trackClick(code);
-    return res.json({
-  success: true,
-  longUrl: link[0].long_url
-});
+
+    // ✅ FORCE REAL REDIRECT
+    return res.redirect(302, link[0].long_url);
 
   } catch (err) {
     console.error(err);
     res.status(500).send('Internal Server Error');
   }
 };
+
 

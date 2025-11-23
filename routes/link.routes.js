@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const controller = require('../Controllers/link.controller');
+const controller =require('../Controllers/link.controller')
 
 // ✅ Create link
 router.post('/links', controller.createLink);
@@ -21,7 +21,7 @@ router.delete('/links/:id', controller.deleteLink);
 router.get('/stats', controller.stats);
 
 // ✅ Health check
-router.get('/healthz', controller.health);
+router.get('/healthz', controller.healthCheck);
 
 // ✅ Redirect & track clicks (must be last)
 router.get('/:code', controller.redirect);

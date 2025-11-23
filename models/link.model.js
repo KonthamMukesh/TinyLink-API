@@ -155,3 +155,19 @@ exports.trackClick = async (code) => {
     throw err;
   }
 };
+exports.getDbHealth = async () => {
+  try {
+    const result = await sql`SELECT version() AS version`;
+
+    return {
+      status: 'UP',
+      version: result[0].version
+    };
+
+  } catch (error) {
+    return {
+      status: 'DOWN',
+      version: 'Unavailable'
+    };
+  }
+};
